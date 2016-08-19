@@ -13,7 +13,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="16dp"
-        android:text="Welcome to GoIV!\n\nInstructions:\n1. Enter your trainer level below\n2. Press the start button and allow screen capture\n3. Open up your desired pokemon in Pokemon GO\n4. Tap the IV Button to scan the pokemon\n5. Adjust the scanned data if necessary\n6. Check IV! "
+        android:text="@string/welcome_message"
         android:textAlignment="center"
         app:layout_constraintLeft_toLeftOf="@+id/activity_main"
         app:layout_constraintRight_toRightOf="@+id/activity_main"
@@ -24,7 +24,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Trainer Level"
+        android:text="@string/trainer_level"
         android:textSize="24sp"
         app:layout_constraintLeft_toLeftOf="@id/activity_main"
         app:layout_constraintRight_toRightOf="@id/activity_main"
@@ -34,13 +34,22 @@
         android:id="@+id/trainerLevel"
         android:layout_width="75dp"
         android:layout_height="wrap_content"
-        android:gravity="right"
+        android:gravity="end"
         android:inputType="number"
         android:text="1"
         android:textAlignment="center"
         app:layout_constraintLeft_toLeftOf="@id/activity_main"
         app:layout_constraintRight_toRightOf="@id/activity_main"
         app:layout_constraintTop_toBottomOf="@id/main_levelLabel" />
+
+    <CheckBox
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/main_battery_saver"
+        android:id="@+id/checkbox_batterySaver"
+        app:layout_constraintLeft_toLeftOf="@id/activity_main"
+        app:layout_constraintRight_toRightOf="@id/activity_main"
+        app:layout_constraintTop_toBottomOf="@id/trainerLevel" />
 
     <Button
         android:id="@+id/start"
@@ -53,24 +62,27 @@
         android:paddingRight="32dp"
         android:paddingStart="32dp"
         android:paddingTop="16dp"
-        android:text="Start"
+        android:text="@string/main_start"
         android:textSize="18sp"
         app:layout_constraintLeft_toLeftOf="@id/activity_main"
         app:layout_constraintRight_toRightOf="@id/activity_main"
-        app:layout_constraintTop_toBottomOf="@id/trainerLevel" />
+        app:layout_constraintTop_toBottomOf="@id/checkbox_batterySaver" />
 
     <TextView
+        android:id="@+id/goiv_info"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:autoLink="web"
         android:padding="16dp"
-        android:text="GoIV is open source!\ngithub.com/farkam135/GoIV "
+        android:text="@string/goiv_is_open_source"
         app:layout_constraintBottom_toBottomOf="@id/activity_main" />
 
     <TextView
+        android:id="@+id/version_number"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:padding="16dp"
-        android:text="v1.3.0"
+        android:text="VersionNumber"
         app:layout_constraintBottom_toBottomOf="@id/activity_main"
         app:layout_constraintRight_toRightOf="@id/activity_main" />
 

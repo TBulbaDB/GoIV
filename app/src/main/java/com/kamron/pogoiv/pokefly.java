@@ -5,18 +5,17 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.Typeface;
+import android.os.Build;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
-import android.text.InputType;
 import android.util.DisplayMetrics;
-import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -28,24 +27,32 @@ import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
+
+import butterknife.BindView;
+import butterknife.ButterKnife;
+import butterknife.OnClick;
 
 /**
  * Created by Kamron on 7/25/2016.
  */
 
 public class pokefly extends Service {
+    private final int MAX_POSSIBILITIES = 8;
+
     private int trainerLevel = -1;
+    private boolean batterySaver = false;
 
     private boolean receivedInfo = false;
 
     private WindowManager windowManager;
     private DisplayMetrics displayMetrics;
+    ClipboardManager clipboard;
 
     private boolean infoShown = false;
     private boolean infoShownReceived = false;
@@ -54,33 +61,21 @@ public class pokefly extends Service {
     private ImageView IVButton;
     private ImageView arcPointer;
     private LinearLayout infoLayout;
-    private Spinner pokemonList;
-    private EditText pokemonCPEdit;
-    private EditText pokemonHPEdit;
-    private SeekBar arcAdjustBar;
-    private Button pokemonGetIVButton;
-    private Button cancelInfoButton;
-    private TextView ivText;
-    private TextView nameText;
-    private TextView cpText;
-    private TextView hpText;
-    private TextView arcAdjustText;
-    private Button decrementLevelButton;
-    private Button incrementLevelButton;
+
+    @BindView(R.id.tvIvInfo) TextView ivText;
+    @BindView(R.id.spnPokemonName) Spinner pokemonList;
+    @BindView(R.id.etCp) EditText pokemonCPEdit;
+    @BindView(R.id.etHp) EditText pokemonHPEdit;
+    @BindView(R.id.sbArcAdjust) SeekBar arcAdjustBar;
+    @BindView(R.id.btnCheckIv) Button pokemonGetIVButton;
+    @BindView(R.id.btnCancelInfo) Button cancelInfoButton;
+    @BindView(R.id.llPokemonInfo) LinearLayout pokemonInfoLayout;
 
     private String pokemonName;
+    private String candyName;
     private int pokemonCP;
     private int pokemonHP;
     private double estimatedPokemonLevel = 1.0;
-
-    private double[] CpM = {0.0939999967813492, 0.135137432089339, 0.166397869586945, 0.192650913155325, 0.215732470154762, 0.236572651424822, 0.255720049142838, 0.273530372106572, 0.290249884128571, 0.306057381389863
-            , 0.321087598800659, 0.335445031996451, 0.349212676286697, 0.362457736609939, 0.375235587358475, 0.387592407713878, 0.399567276239395, 0.4111935532161, 0.422500014305115, 0.432926420512509, 0.443107545375824
-            , 0.453059948165049, 0.46279838681221, 0.472336085311278, 0.481684952974319, 0.490855807179549, 0.499858438968658, 0.5087017489616, 0.517393946647644, 0.525942516110322, 0.534354329109192, 0.542635753803599
-            , 0.550792694091797, 0.558830584490385, 0.566754519939423, 0.57456912814537, 0.582278907299042, 0.589887907888945, 0.597400009632111, 0.604823648665171, 0.61215728521347, 0.619404107958234, 0.626567125320435
-            , 0.633649178748576, 0.6406529545784, 0.647580971386554, 0.654435634613037, 0.661219265805859, 0.667934000492096, 0.674581885647492, 0.681164920330048, 0.687684901255373, 0.694143652915955, 0.700542901033063
-            , 0.706884205341339, 0.713169074873823, 0.719399094581604, 0.725575586915154, 0.731700003147125, 0.734741038550429, 0.737769484519958, 0.740785579737136, 0.743789434432983, 0.746781197247765, 0.749761044979095
-            , 0.752729099732281, 0.75568550825119, 0.758630370209851, 0.761563837528229, 0.76448604959218, 0.767397165298462, 0.770297293677362, 0.773186504840851, 0.776064947064992, 0.778932750225067, 0.781790050767666
-            , 0.784636974334717, 0.787473608513275, 0.790300011634827};
 
     private List<Pokemon> pokemon;
     private ArrayAdapter<Pokemon> pokeAdapter;
@@ -122,37 +117,29 @@ public class pokefly extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         //Display disp = windowManager.getDefaultDisplay();
         //disp.getRealMetrics(displayMetrics);
         //System.out.println("New Device:" + displayMetrics.widthPixels + "," + displayMetrics.heightPixels + "," + displayMetrics.densityDpi + "," + displayMetrics.density);
 
         LocalBroadcastManager.getInstance(this).registerReceiver(displayInfo, new IntentFilter("pokemon-info"));
         LocalBroadcastManager.getInstance(this).registerReceiver(setIVButtonDisplay, new IntentFilter("display-ivButton"));
-        switch (Locale.getDefault().getLanguage()) {
-            case "fr":
-                populatePokemon_fr();
-                break;
-            case "de":
-                populatePokemon_de();
-                break;
-            default:
-                populatePokemon_en();
-        }
+        populatePokemon();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && intent.hasExtra("trainerLevel") && intent.hasExtra("statusBarHeight")) {
+        if (intent != null && intent.hasExtra("trainerLevel")) {
             trainerLevel = intent.getIntExtra("trainerLevel", 1);
             statusBarHeight = intent.getIntExtra("statusBarHeight", 0);
+            batterySaver = intent.getBooleanExtra("batterySaver",false);
             makeNotification(pokefly.this);
             displayMetrics = this.getResources().getDisplayMetrics();
+            createInfoLayout();
             createIVButton();
             createArcPointer();
             createArcAdjuster();
-            createInfoLayout();
         }
         return START_STICKY;
     }
@@ -163,12 +150,9 @@ public class pokefly extends Service {
         super.onDestroy();
         if (IVButton != null && IVButtonShown) windowManager.removeView(IVButton);
         if (infoShown) {
-            try {
-                if (arcPointer != null) windowManager.removeView(arcPointer);
-                //if(arcAdjustBar != null) windowManager.removeView(arcAdjustBar);
-                if (infoLayout != null) windowManager.removeView(infoLayout);
-            } catch (Exception e) {
-            }
+            if (arcPointer != null) windowManager.removeView(arcPointer);
+            //if(arcAdjustBar != null) windowManager.removeView(arcAdjustBar);
+            if (infoLayout != null) windowManager.removeView(infoLayout);
         }
         stopForeground(true);
         LocalBroadcastManager.getInstance(this).unregisterReceiver(displayInfo);
@@ -189,9 +173,9 @@ public class pokefly extends Service {
                 8959, intent, PendingIntent.FLAG_UPDATE_CURRENT);
 
         Notification.Builder builder = new Notification.Builder(context)
-                .setContentTitle("GoIV Running - Level " + trainerLevel)
-                .setContentText("Tap to open")
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(String.format(getString(R.string.notification_title), trainerLevel))
+                .setContentText(getString(R.string.notification_text))
+                .setSmallIcon(R.drawable.notification_icon)
                 .setContentIntent(pendingIntent);
         Notification n = builder.build();
 
@@ -205,13 +189,18 @@ public class pokefly extends Service {
      * pokemon go's arc pointer
      */
     private void createArcPointer() {
-        arcParams.gravity = Gravity.TOP | Gravity.LEFT;
+        arcParams.gravity = Gravity.TOP | Gravity.START;
         arcPointer = new ImageView(this);
         arcPointer.setImageResource(R.drawable.dot);
 
-
-        pointerHeight = getDrawable(R.drawable.dot).getIntrinsicHeight() / 2;
-        pointerWidth = getDrawable(R.drawable.dot).getIntrinsicWidth() / 2;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            pointerHeight = getDrawable(R.drawable.dot).getIntrinsicHeight() / 2;
+            pointerWidth = getDrawable(R.drawable.dot).getIntrinsicWidth() / 2;
+        }
+        else{
+            pointerHeight = getResources().getDrawable(R.drawable.dot).getIntrinsicHeight() / 2;
+            pointerWidth = getResources().getDrawable(R.drawable.dot).getIntrinsicWidth() / 2;
+        }
 
         arcCenter = (int) ((displayMetrics.widthPixels * 0.5) - pointerWidth);
         arcInitialY = (int) Math.floor(displayMetrics.heightPixels / 2.803943) - pointerHeight - statusBarHeight; // 913 - pointerHeight - statusBarHeight; //(int)Math.round(displayMetrics.heightPixels / 6.0952381) * -1; //dpToPx(113) * -1; //(int)Math.round(displayMetrics.heightPixels / 6.0952381) * -1; //-420;
@@ -231,15 +220,20 @@ public class pokefly extends Service {
      * setArcPointer
      * Sets the arc pointer to the specified degree.
      *
-     * @param angleInDegrees The degree to set the arc pointer to.
+     * @param pokeLevel The pokemon level to set the arc pointer to.
      */
-    private void setArcPointer(double angleInDegrees) {
-        if (angleInDegrees > 1.0) {
-            angleInDegrees -= 0.5;
-        }
-        double angleInRadians = (angleInDegrees + 180) * Math.PI / 180.0;
-        arcParams.x = (int) (arcCenter + (radius * Math.cos(angleInRadians)));
-        arcParams.y = (int) (arcInitialY + (radius * Math.sin(angleInRadians)));
+    private void setArcPointer(double pokeLevel) {
+//        if (angleInDegrees > 1.0 && trainerLevel < 30) {
+//            angleInDegrees -= 0.5;
+//        }
+//        else if(trainerLevel >= 30){
+//            angleInDegrees += 0.5;
+//        }
+//
+//        double angleInRadians = (angleInDegrees + 180) * Math.PI / 180.0;
+        int index = Data.convertLevelToIndex(pokeLevel);
+        arcParams.x = Data.arcX[index] - pointerWidth; //(int) (arcCenter + (radius * Math.cos(angleInRadians)));
+        arcParams.y = Data.arcY[index] - pointerHeight - statusBarHeight; //(int) (arcInitialY + (radius * Math.sin(angleInRadians)));
         //System.out.println("Pointer X: "  + arcParams.x);
         //System.out.println("Pointer Y: "  + arcParams.y);
         //System.out.println(arcParams.x + "," + arcParams.y);
@@ -251,15 +245,14 @@ public class pokefly extends Service {
      * Creates the arc adjuster used to move the arc pointer in the scan screen
      */
     private void createArcAdjuster() {
-        arcAdjustBar = new SeekBar(this);
-        arcAdjustBar.setPadding(32, 0, 32, 0);
         arcAdjustBar.setMax(Math.min(trainerLevel * 2 + 1, 79));
 
         arcAdjustBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 estimatedPokemonLevel = 1 + (progress * 0.5);
-                setArcPointer((CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / CpM[trainerLevel * 2 - 2]);
+                setArcPointer(estimatedPokemonLevel);
+                //setArcPointer((Data.CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / Data.CpM[trainerLevel * 2 - 2]);
             }
 
             @Override
@@ -282,38 +275,33 @@ public class pokefly extends Service {
         IVButton = new ImageView(this);
         IVButton.setImageResource(R.drawable.button);
 
-        IVButonParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+        IVButonParams.gravity = Gravity.BOTTOM | Gravity.START;
         IVButonParams.x = dpToPx(20); //(int)Math.round(displayMetrics.widthPixels / 20.5714286);
         IVButonParams.y = dpToPx(15); //(int)Math.round(displayMetrics.heightPixels / 38.5714286);
 
-        try {
-            IVButton.setOnTouchListener(new View.OnTouchListener() {
-                //private WindowManager.LayoutParams paramsF = IVButonParams;
-                //private int initialX;
-                //private int initialY;
-                //private float initialTouchX;
-                //private float initialTouchY;
+        IVButton.setOnTouchListener(new View.OnTouchListener() {
+            //private WindowManager.LayoutParams paramsF = IVButonParams;
+            //private int initialX;
+            //private int initialY;
+            //private float initialTouchX;
+            //private float initialTouchY;
 
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    switch (event.getAction()) {
-                        case MotionEvent.ACTION_UP:
-                            Toast.makeText(pokefly.this, "Scanning...", Toast.LENGTH_SHORT).show();
-                            windowManager.removeView(IVButton);
-                            IVButtonShown = false;
-                            Intent intent = new Intent("screenshot");
-                            LocalBroadcastManager.getInstance(pokefly.this).sendBroadcast(intent);
-                            receivedInfo = false;
-                            infoShown = true;
-                            infoShownReceived = false;
-                            break;
-                    }
-                    return false;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_UP:
+                        windowManager.removeView(IVButton);
+                        IVButtonShown = false;
+                        Intent intent = new Intent("screenshot");
+                        LocalBroadcastManager.getInstance(pokefly.this).sendBroadcast(intent);
+                        receivedInfo = false;
+                        infoShown = true;
+                        infoShownReceived = false;
+                        break;
                 }
-            });
-        } catch (Exception e) {
-            // TODO: handle exception
-        }
+                return false;
+            }
+        });
 
         //windowManager.addView(IVButton, IVButonParams);
     }
@@ -323,181 +311,58 @@ public class pokefly extends Service {
      * creates the info layout which contains all the scanned data views and allows for correction.
      */
     private void createInfoLayout() {
+        LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
+        infoLayout = (LinearLayout) inflater.inflate(R.layout.dialog_info_window, null);
         layoutParams.gravity = Gravity.CENTER | Gravity.BOTTOM;
+        ButterKnife.bind(this, infoLayout);
 
-        LinearLayout.LayoutParams horizParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
-
-
-        infoLayout = new LinearLayout(this);
-        infoLayout.setPadding(64, 64, 64, 64);
-        infoLayout.setOrientation(LinearLayout.VERTICAL);
-        infoLayout.setBackground(getDrawable(android.R.drawable.alert_light_frame));
-        infoLayout.getBackground().setAlpha(225);
-
-
-        ivText = new TextView(this);
-        ivText.setVisibility(View.GONE);
-        ivText.setTextSize(18);
-        ivText.setTextColor(Color.BLACK);
-        ivText.setPadding(16, 0, 0, 0);
-        infoLayout.addView(ivText);
-
-        LinearLayout pokeNameHorizontal = new LinearLayout(this);
-        pokeNameHorizontal.setGravity(Gravity.CENTER_HORIZONTAL);
-
-        nameText = new TextView(this);
-        nameText.setText("Pokemon Name: ");
-        nameText.setTextColor(Color.BLACK);
-        nameText.setTypeface(Typeface.DEFAULT_BOLD);
-        nameText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        pokeNameHorizontal.addView(nameText);
-
-        pokemonList = new Spinner(this);
-        pokeAdapter = new ArrayAdapter<Pokemon>(this, R.layout.spinner_pokemon, pokemon);
+        pokeAdapter = new ArrayAdapter<>(this, R.layout.spinner_pokemon, pokemon);
         pokemonList.setAdapter(pokeAdapter);
-        pokemonList.setPopupBackgroundResource(R.drawable.spinner);
-        pokeNameHorizontal.addView(pokemonList);
+    }
 
-        infoLayout.addView(pokeNameHorizontal);
+    @OnClick(R.id.btnDecrementLevel)
+    public void decrementLevel() {
+        if (estimatedPokemonLevel > 1.0) {
+            estimatedPokemonLevel -= 0.5;
+        }
+        setArcPointer(estimatedPokemonLevel);
+        //setArcPointer((Data.CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / Data.CpM[trainerLevel * 2 - 2]);
+        arcAdjustBar.setProgress((int) ((estimatedPokemonLevel - 1) * 2));
+    }
 
-        LinearLayout cphpHorizontal = new LinearLayout(this);
+    @OnClick(R.id.btnIncrementLevel)
+    public void incrementLevel() {
+        if (estimatedPokemonLevel < trainerLevel + 1.5 && estimatedPokemonLevel < 40.5) {
+            estimatedPokemonLevel += 0.5;
+        }
+        setArcPointer(estimatedPokemonLevel);
+        //setArcPointer((Data.CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / Data.CpM[trainerLevel * 2 - 2]);
+        arcAdjustBar.setProgress((int) ((estimatedPokemonLevel - 1) * 2));
+    }
 
-        LinearLayout cpLayout = new LinearLayout(this);
-        cpLayout.setOrientation(LinearLayout.VERTICAL);
-        cpLayout.setGravity(Gravity.CENTER);
-        cpText = new TextView(this);
-        cpText.setText("CP");
-        cpText.setTextColor(Color.BLACK);
-        cpText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        cpText.setTypeface(Typeface.DEFAULT_BOLD);
-        cpText.setGravity(Gravity.CENTER);
-        cpLayout.addView(cpText);
+    @OnClick(R.id.btnCheckIv)
+    public void checkIv() {
+        pokemonHP = Integer.parseInt(pokemonHPEdit.getText().toString());
+        pokemonCP = Integer.parseInt(pokemonCPEdit.getText().toString());
+        ivText.setVisibility(View.VISIBLE);
+        pokemonInfoLayout.setVisibility(View.GONE);
+        ivText.setText(getIVText());
+        pokemonGetIVButton.setVisibility(View.GONE);
+        cancelInfoButton.setText(getString(R.string.close));
+    }
 
-        pokemonCPEdit = new EditText(this);
-        pokemonCPEdit.setWidth(250);
-        pokemonCPEdit.setTextColor(Color.RED);
-        pokemonCPEdit.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
-        pokemonCPEdit.setInputType(InputType.TYPE_CLASS_NUMBER);
-        cpLayout.addView(pokemonCPEdit);
-
-        LinearLayout hpLayout = new LinearLayout(this);
-        hpLayout.setOrientation(LinearLayout.VERTICAL);
-        hpLayout.setGravity(Gravity.CENTER);
-        hpText = new TextView(this);
-        hpText.setText("HP");
-        hpText.setTextColor(Color.BLACK);
-        hpText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        hpText.setTypeface(Typeface.DEFAULT_BOLD);
-        hpText.setGravity(Gravity.CENTER_HORIZONTAL);
-        hpLayout.addView(hpText);
-
-        pokemonHPEdit = new EditText(this);
-        pokemonHPEdit.setWidth(250);
-        pokemonHPEdit.setTextColor(Color.RED);
-        pokemonHPEdit.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
-        pokemonHPEdit.setInputType(InputType.TYPE_CLASS_NUMBER);
-        hpLayout.addView(pokemonHPEdit);
-
-        cphpHorizontal.addView(cpLayout, horizParams);
-        cphpHorizontal.addView(hpLayout, horizParams);
-        infoLayout.addView(cphpHorizontal);
-
-        arcAdjustText = new TextView(this);
-        arcAdjustText.setText("Use the slider below to align the arc");
-        arcAdjustText.setTextColor(Color.BLACK);
-        arcAdjustText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        arcAdjustText.setTypeface(Typeface.DEFAULT_BOLD);
-        arcAdjustText.setGravity(Gravity.CENTER);
-        infoLayout.addView(arcAdjustText);
-
-        LinearLayout arcAdjustLayout = new LinearLayout(this);
-        arcAdjustLayout.setGravity(Gravity.CENTER);
-        decrementLevelButton = new Button(this);
-        decrementLevelButton.setText("-");
-        decrementLevelButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26.0f);
-        decrementLevelButton.setTextColor(Color.RED);
-        decrementLevelButton.setBackgroundColor(Color.TRANSPARENT);
-        decrementLevelButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (estimatedPokemonLevel > 1.0) {
-                    estimatedPokemonLevel -= 0.5;
-                }
-                setArcPointer((CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / CpM[trainerLevel * 2 - 2]);
-                arcAdjustBar.setProgress((int) ((estimatedPokemonLevel - 1) * 2));
-            }
-        });
-        incrementLevelButton = new Button(this);
-        incrementLevelButton.setText("+");
-        incrementLevelButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22.0f);
-        incrementLevelButton.setTextColor(Color.RED);
-        incrementLevelButton.setBackgroundColor(Color.TRANSPARENT);
-        incrementLevelButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (estimatedPokemonLevel < trainerLevel + 1.5 && estimatedPokemonLevel < 40.5) {
-                    estimatedPokemonLevel += 0.5;
-                }
-                setArcPointer((CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / CpM[trainerLevel * 2 - 2]);
-                arcAdjustBar.setProgress((int) ((estimatedPokemonLevel - 1) * 2));
-            }
-        });
-        arcAdjustLayout.addView(decrementLevelButton, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0.05f));
-        arcAdjustLayout.addView(arcAdjustBar, horizParams);
-        arcAdjustLayout.addView(incrementLevelButton, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0.05f));
-
-        infoLayout.addView(arcAdjustLayout);
-
-        LinearLayout horizontalButtonLayout = new LinearLayout(this);
-
-        pokemonGetIVButton = new Button(this);
-        pokemonGetIVButton.setText("Check IV");
-        pokemonGetIVButton.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                pokemonHP = Integer.parseInt(pokemonHPEdit.getText().toString());
-                pokemonCP = Integer.parseInt(pokemonCPEdit.getText().toString());
-                //windowManager.removeView(infoLayout);
-                ivText.setText(getIVText());
-                ivText.setVisibility(View.VISIBLE);
-                nameText.setVisibility(View.GONE);
-                pokemonList.setVisibility(View.GONE);
-                cpText.setVisibility(View.GONE);
-                pokemonCPEdit.setVisibility(View.GONE);
-                hpText.setVisibility(View.GONE);
-                pokemonHPEdit.setVisibility(View.GONE);
-                arcAdjustText.setVisibility(View.GONE);
-                arcAdjustBar.setVisibility(View.GONE);
-                pokemonGetIVButton.setVisibility(View.GONE);
-                decrementLevelButton.setVisibility(View.GONE);
-                incrementLevelButton.setVisibility(View.GONE);
-                cancelInfoButton.setText("Close");
-            }
-        });
-
-        cancelInfoButton = new Button(this);
-        cancelInfoButton.setText("Cancel");
-        cancelInfoButton.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
-                windowManager.removeView(infoLayout);
-                windowManager.removeView(arcPointer);
-                windowManager.addView(IVButton, IVButonParams);
-                receivedInfo = false;
-                infoShown = false;
-                IVButtonShown = true;
-            }
-        });
-
-        horizontalButtonLayout.addView(cancelInfoButton, horizParams);
-        horizontalButtonLayout.addView(pokemonGetIVButton, horizParams);
-        horizontalButtonLayout.setPadding(0, 16, 0, 0);
-
-        infoLayout.addView(horizontalButtonLayout);
+    @OnClick(R.id.btnCancelInfo)
+    public void cancelInfoDialog() {
+        windowManager.removeView(infoLayout);
+        windowManager.removeView(arcPointer);
+        if(!batterySaver) {
+            windowManager.addView(IVButton, IVButonParams);
+            IVButtonShown = true;
+        }
+        receivedInfo = false;
+        infoShown = false;
+        Intent resetIntent = new Intent("reset-screenshot");
+        LocalBroadcastManager.getInstance(pokefly.this).sendBroadcast(resetIntent);
     }
 
     /**
@@ -508,40 +373,50 @@ public class pokefly extends Service {
     private void showInfoLayout() {
         if (!infoShownReceived) {
             infoShownReceived = true;
-            int pokeNumber = 0;
-            int bestMatch = 100;
-            for (int i = 0; i < pokemon.size(); i++) {
-                int similarity = pokemon.get(i).getSimilarity(pokemonName);
-                if (similarity < bestMatch) {
-                    pokeNumber = i;
-                    bestMatch = similarity;
-                }
+            int[] possiblePoke = getPossiblePokemon(pokemonName);
+            int[] possibleCandy = getPossiblePokemon(candyName);
+            ivText.setVisibility(View.GONE);
+            pokemonInfoLayout.setVisibility(View.VISIBLE);
+            pokemonGetIVButton.setVisibility(View.VISIBLE);
+
+            pokemonName = pokemon.get(possiblePoke[0]).name;
+            candyName = pokemon.get(possibleCandy[0]).name;
+            if (possiblePoke[1] < 2) {
+                pokemonList.setSelection(possiblePoke[0]);
+            } else {
+                pokemonList.setSelection(possibleCandy[0]);
             }
-            pokemonName = pokemon.get(pokeNumber).name;
-            pokemonList.setSelection(pokeNumber);
             pokemonHPEdit.setText(String.valueOf(pokemonHP));
             pokemonCPEdit.setText(String.valueOf(pokemonCP));
-            ivText.setVisibility(View.GONE);
-            nameText.setVisibility(View.VISIBLE);
-            pokemonList.setVisibility(View.VISIBLE);
-            cpText.setVisibility(View.VISIBLE);
-            pokemonCPEdit.setVisibility(View.VISIBLE);
-            hpText.setVisibility(View.VISIBLE);
-            pokemonHPEdit.setVisibility(View.VISIBLE);
-            arcAdjustText.setVisibility(View.VISIBLE);
-            arcAdjustBar.setVisibility(View.VISIBLE);
-            pokemonGetIVButton.setVisibility(View.VISIBLE);
-            decrementLevelButton.setVisibility(View.VISIBLE);
-            incrementLevelButton.setVisibility(View.VISIBLE);
-            cancelInfoButton.setText("Cancel");
+            cancelInfoButton.setText(getString(R.string.cancel));
 
             windowManager.addView(arcPointer, arcParams);
             windowManager.addView(infoLayout, layoutParams);
-            setArcPointer((CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / CpM[trainerLevel * 2 - 2]);
+            setArcPointer(estimatedPokemonLevel);
+            //setArcPointer((Data.CpM[(int) (estimatedPokemonLevel * 2 - 2)] - 0.094) * 202.037116 / Data.CpM[trainerLevel * 2 - 2]);
             arcAdjustBar.setProgress((int) ((estimatedPokemonLevel - 1) * 2));
-            Intent resetIntent = new Intent("reset-screenshot");
-            LocalBroadcastManager.getInstance(pokefly.this).sendBroadcast(resetIntent);
+
+            if(batterySaver){
+                infoShownReceived = false;
+            }
         }
+    }
+
+    /**
+     * @return the likely pokemon number against the char sequence as well as the similarity
+     */
+    private int[] getPossiblePokemon(CharSequence rhs) {
+        int pokeNumber = 0;
+        int bestMatch = 100;
+        for (int i = 0; i < pokemon.size(); i++) {
+            int similarity = pokemon.get(i).getSimilarity(rhs);
+            if (similarity < bestMatch) {
+                pokeNumber = i;
+                bestMatch = similarity;
+            }
+        }
+        int[] result = {pokeNumber,bestMatch};
+        return result;
     }
 
     /**
@@ -555,37 +430,57 @@ public class pokefly extends Service {
         int baseAttack = pokemon.get(pokemonList.getSelectedItemPosition()).baseAttack;
         int baseDefense = pokemon.get(pokemonList.getSelectedItemPosition()).baseDefense;
         int baseStamina = pokemon.get(pokemonList.getSelectedItemPosition()).baseStamina;
-        double lvlScalar = CpM[(int) (estimatedPokemonLevel * 2 - 2)];
+        double lvlScalar = Data.CpM[(int) (estimatedPokemonLevel * 2 - 2)];
+        double lvlScalarPow2 = Math.pow(lvlScalar, 2) * 0.1; // instead of computing again in every loop
+        //for averagePercent
+        int sumIV;
+        int averageSum = 0;
+        //IV vars for lower and upper end cp ranges
+        int lowAttack = 15;
+        int lowDefense = 15;
+        int lowStamina = 15;
+        int highAttack = 0;
+        int highDefense = 0;
+        int highStamina = 0;
 
-        String returnVal = "Your LV" + estimatedPokemonLevel + " " + pokemonName + " can be: ";
+        String returnVal = String.format(getString(R.string.ivtext_title), estimatedPokemonLevel, pokemonName);
 
         int count = 0;
         int lowPercent = 100;
-        int averagePercent = 0;
+        int averagePercent;
         int highPercent = 0;
-        int neededStardust = 0;
-        int neededCandy = 0;
+
         if (pokemonHP != 10 && pokemonCP != 10) {
             for (int staminaIV = 0; staminaIV < 16; staminaIV++) {
                 int hp = (int) Math.max(Math.floor((baseStamina + staminaIV) * lvlScalar), 10);
                 if (hp == pokemonHP) {
+                    double lvlScalarStamina = Math.sqrt(baseStamina + staminaIV) * lvlScalarPow2;
                     //Possible STA IV
                     //System.out.println("Checking sta: " + staminaIV + ", gives " + hp);
                     for (int defenseIV = 0; defenseIV < 16; defenseIV++) {
                         for (int attackIV = 0; attackIV < 16; attackIV++) {
-                            int cp = (int) Math.floor((baseAttack + attackIV) * Math.sqrt(baseDefense + defenseIV) * Math.sqrt(baseStamina + staminaIV) * Math.pow(lvlScalar, 2) * 0.1);
+                            int cp = (int) Math.floor((baseAttack + attackIV) * Math.sqrt(baseDefense + defenseIV) * lvlScalarStamina);
                             if (cp == pokemonCP) {
                                 ++count;
-                                int percentPerfect = (int) Math.round(((attackIV + defenseIV + staminaIV) / 45.0) * 100);
-                                if (percentPerfect < lowPercent) {
+                                sumIV = attackIV + defenseIV + staminaIV; // new
+                                int percentPerfect = (int) Math.round(((sumIV) / 45.0) * 100);
+                                if ((percentPerfect < lowPercent) || ((percentPerfect == lowPercent) && (attackIV < lowAttack))) { // check for same percentage but lower atk
                                     lowPercent = percentPerfect;
+                                    //save worst combination for lower end cp range
+                                    lowAttack = attackIV;
+                                    lowDefense = defenseIV;
+                                    lowStamina = staminaIV;
                                 }
-                                if (percentPerfect > highPercent) {
+                                if ((percentPerfect > highPercent) || ((percentPerfect == highPercent) && (attackIV > highAttack))) { // check for same percentage but higher atk
                                     highPercent = percentPerfect;
+                                    //save best combination for upper end cp range
+                                    highAttack = attackIV;
+                                    highDefense = defenseIV;
+                                    highStamina = staminaIV;
                                 }
-                                averagePercent += percentPerfect;
-                                if (count <= 8) {
-                                    returnVal += "\n" + String.format("%-9s", "Atk: " + attackIV) + String.format("%-9s", "Def: " + defenseIV) + String.format("%-8s", "Sta: " + staminaIV) + "(" + percentPerfect + "%)";
+                                averageSum += sumIV; //changed, more precise than rounded percentage
+                                if (count <= MAX_POSSIBILITIES) {
+                                    returnVal += "\n" + String.format(getString(R.string.ivtext_stats), attackIV, defenseIV, staminaIV, percentPerfect); //String.format("%-9s", "Atk: " + attackIV) + String.format("%-9s", "Def: " + defenseIV) + String.format("%-8s", "Sta: " + staminaIV) + "(" + percentPerfect + "%)";
                                     //returnVal += "\n" + String.format("%9s%9s%9s","Atk: " + attackIV,"Def: " + defenseIV,"Sta: " +staminaIV) + " (" + percentPerfect + "%)";
                                     //returnVal += "\nAtk: " + attackIV + "   Def: " + defenseIV + "   Sta: " + staminaIV + " (" + percentPerfect  + "%)";
                                 }
@@ -593,27 +488,90 @@ public class pokefly extends Service {
                         }
                     }
                 }
+                else if (hp > pokemonHP) {
+                    break;
+                }
             }
 
-            if (count > 8) {
-                returnVal += "\n" + (count - 8) + " more possibilities...";
+            if (count > MAX_POSSIBILITIES) {
+                returnVal += "\n" + String.format(getString(R.string.ivtext_possibilities), count - MAX_POSSIBILITIES);
             }
 
             if (count == 0) {
-                returnVal += "\nNo possibilities, please check your stats again!";
+                returnVal += "\n" + getString(R.string.ivtext_no_possibilities);
             } else {
-                returnVal += "\nMin: " + lowPercent + "%   Average: " + (averagePercent / count) + "%   Max: " + highPercent + "%";
+                averagePercent = (int) Math.round(((averageSum * 100 / (45.0 * count)))); // new
+                returnVal += "\n" + String.format(getString(R.string.ivtext_iv), lowPercent, averagePercent, highPercent); //"\nMin: " + lowPercent + "%   Average: " + averagePercent + "%   Max: " + highPercent + "%" + "\n"; // count removed
+
+                // for trainer level cp cap, if estimatedPokemonLevel is at cap do not print
+                if (estimatedPokemonLevel < trainerLevel + 1.5) {
+                    returnVal += getCpRangeAtLevel(pokemonList.getSelectedItemPosition(), lowAttack, lowDefense, lowStamina, highAttack, highDefense, highStamina, Math.min(trainerLevel + 1.5, 40.0));
+                }
+
+                ArrayList<Integer> evolutions = pokemon.get(pokemonList.getSelectedItemPosition()).evolutions;
+                //for each evolution of next stage (example, eevees three evolutions jolteon, vaporeon and flareon)
+                for(int i = evolutions.size()-1; i>=0; i--){
+                    pokemonName = pokemon.get(evolutions.get(i)).name;
+                    returnVal += "\n" + String.format(getString(R.string.ivtext_evolve), pokemonName);
+                    returnVal += getCpRangeAtLevel(evolutions.get(i), lowAttack, lowDefense, lowStamina, highAttack, highDefense, highStamina, (trainerLevel + 1.5));
+                    //for following stage evolution (example, dratini - dragonair - dragonite)
+                    int nextEvolutionNbr = evolutions.get(i);
+                    //if the current evolution has another evolution calculate its range and break
+                    if (pokemon.get(nextEvolutionNbr).evolutions.size() != 0) {
+                        int nextEvoStage = pokemon.get(nextEvolutionNbr).evolutions.get(0);
+                        pokemonName = pokemon.get(nextEvoStage).name;
+                        returnVal += String.format(getString(R.string.ivtext_evolve_further), pokemonName);
+                        returnVal += getCpRangeAtLevel(nextEvoStage, lowAttack, lowDefense, lowStamina, highAttack, highDefense, highStamina, (trainerLevel + 1.5));
+                        break;
+                    }
+                }
+
+                //Temporary disable of copy until settings menu is up
+                //ClipData clip = ClipData.newPlainText("iv",lowPercent + "-" + highPercent);
+                //clipboard.setPrimaryClip(clip);
             }
         } else {
-            returnVal += "\nThere are too many possibilities for this pokemon. Try powering it up!";
+            returnVal += "\n" + getString(R.string.ivtext_many_possibilities);
         }
 
 
-        returnVal += "\nTo max level:\n" + getMaxReqText();
+        returnVal += "\n\n" + String.format(getString(R.string.ivtext_max_lvl_cost), trainerLevel + 1.5) + "\n" + getMaxReqText();
         //returnVal += percentPerfect + "% perfect!\n";
         //returnVal += "Atk+Def: " + battleScore + "/30   Sta: " + stamScore + "/15";
         return returnVal;
     }
+
+    /**
+     * getCpAtRangeLevel
+     * Used to calculate CP ranges for a species at a specific level based on the lowest and highest
+     * IV combination.
+     *
+     * @param pokemonIndex the index of the pokemon species within the pokemon list (sorted)
+     * @param lowAttack attack IV of the lowest combination
+     * @param lowDefense defense IV of the lowest combination
+     * @param lowStamina stamina IV of the lowest combination
+     * @param highAttack attack IV of the highest combination
+     * @param highDefense defense IV of the highest combination
+     * @param highStamina stamina IV of the highest combination
+     * @param level pokemon level for CP calculation
+     *
+     * @return String containing the CP range including the specified level.
+     */
+    private String getCpRangeAtLevel(int pokemonIndex, int lowAttack, int lowDefense, int lowStamina, int highAttack, int highDefense, int highStamina, double level) {
+        int baseAttack = pokemon.get(pokemonIndex).baseAttack;
+        int baseDefense = pokemon.get(pokemonIndex).baseDefense;
+        int baseStamina = pokemon.get(pokemonIndex).baseStamina;
+        double lvlScalar = Data.CpM[(int) (level * 2 - 2)];
+        int cpMin = (int) Math.floor((baseAttack + lowAttack) * Math.sqrt(baseDefense + lowDefense) * Math.sqrt(baseStamina + lowStamina) * Math.pow(lvlScalar, 2) * 0.1);
+        int cpMax = (int) Math.floor((baseAttack + highAttack) * Math.sqrt(baseDefense + highDefense) * Math.sqrt(baseStamina + highStamina) * Math.pow(lvlScalar, 2) * 0.1);
+        if (cpMin > cpMax) {
+            int tmp = cpMax;
+            cpMax = cpMin;
+            cpMin = tmp;
+        }
+        return String.format(getString(R.string.ivtext_cp_lvl), level, cpMin, cpMax);
+    }
+
 
     /**
      * getMaxReqText
@@ -639,10 +597,10 @@ public class pokefly extends Service {
             if (estimatedPokemonLevel <= 10.5) {
                 neededCandy++;
                 neededStarDust += rank * 200;
-            } else if (estimatedPokemonLevel > 10.5 && estimatedPokemonLevel <= 18.5) {
+            } else if (estimatedPokemonLevel > 10.5 && estimatedPokemonLevel <= 20.5) {
                 neededCandy += 2;
                 neededStarDust += 1000 + (rank * 300);
-            } else if (estimatedPokemonLevel > 18.5 && estimatedPokemonLevel <= 30.5) {
+            } else if (estimatedPokemonLevel > 20.5 && estimatedPokemonLevel <= 30.5) {
                 neededCandy += 3;
                 neededStarDust += 2500 + (rank * 500);
             } else if (estimatedPokemonLevel > 30.5) {
@@ -652,7 +610,7 @@ public class pokefly extends Service {
 
             estimatedPokemonLevel += 0.5;
         }
-        return "Candy: " + neededCandy + " Stardust: " + NumberFormat.getInstance().format(neededStarDust);
+        return String.format(getString(R.string.ivtext_max_lvl_cost2), neededCandy, NumberFormat.getInstance().format(neededStarDust));
     }
 
     /**
@@ -666,6 +624,7 @@ public class pokefly extends Service {
             if (!receivedInfo && intent.hasExtra("name") && intent.hasExtra("cp") && intent.hasExtra("hp") && intent.hasExtra("level")) {
                 receivedInfo = true;
                 pokemonName = intent.getStringExtra("name");
+                candyName = intent.getStringExtra("candy");
                 pokemonCP = intent.getIntExtra("cp", 0);
                 pokemonHP = intent.getIntExtra("hp", 0);
                 estimatedPokemonLevel = intent.getDoubleExtra("level", estimatedPokemonLevel);
@@ -699,472 +658,201 @@ public class pokefly extends Service {
     };
 
     private int dpToPx(int dp) {
-        int px = Math.round(dp * (displayMetrics.xdpi / DisplayMetrics.DENSITY_DEFAULT));
-        return px;
+        return Math.round(dp * (displayMetrics.xdpi / DisplayMetrics.DENSITY_DEFAULT));
     }
 
-    private void populatePokemon_en() {
-        pokemon = new ArrayList<Pokemon>();
-        pokemon.add(new Pokemon("Abra", 110, 76, 50));
-        pokemon.add(new Pokemon("Aerodactyl", 182, 162, 160));
-        pokemon.add(new Pokemon("Alakazam", 186, 152, 110));
-        pokemon.add(new Pokemon("Arbok", 166, 166, 120));
-        pokemon.add(new Pokemon("Arcanine", 230, 180, 180));
-        pokemon.add(new Pokemon("Articuno", 198, 242, 180));
-        pokemon.add(new Pokemon("Beedrill", 144, 130, 130));
-        pokemon.add(new Pokemon("Bellsprout", 158, 78, 100));
-        pokemon.add(new Pokemon("Blastoise", 186, 222, 158));
-        pokemon.add(new Pokemon("Bulbasaur", 126, 126, 90));
-        pokemon.add(new Pokemon("Butterfree", 144, 144, 120));
-        pokemon.add(new Pokemon("Caterpie", 62, 66, 90));
-        pokemon.add(new Pokemon("Chansey", 40, 60, 500));
-        pokemon.add(new Pokemon("Charizard", 212, 182, 156));
-        pokemon.add(new Pokemon("Charmander", 128, 108, 78));
-        pokemon.add(new Pokemon("Charmeleon", 160, 140, 116));
-        pokemon.add(new Pokemon("Clefable", 178, 178, 190));
-        pokemon.add(new Pokemon("Clefairy", 116, 124, 140));
-        pokemon.add(new Pokemon("Cloyster", 196, 196, 100));
-        pokemon.add(new Pokemon("Cubone", 102, 150, 100));
-        pokemon.add(new Pokemon("Dewgong", 156, 192, 180));
-        pokemon.add(new Pokemon("Diglett", 108, 86, 20));
-        pokemon.add(new Pokemon("Ditto", 110, 110, 96));
-        pokemon.add(new Pokemon("Dodrio", 182, 150, 120));
-        pokemon.add(new Pokemon("Doduo", 126, 96, 70));
-        pokemon.add(new Pokemon("Dragonair", 170, 152, 122));
-        pokemon.add(new Pokemon("Dragonite", 250, 212, 182));
-        pokemon.add(new Pokemon("Dratini", 128, 110, 82));
-        pokemon.add(new Pokemon("Drowzee", 104, 140, 120));
-        pokemon.add(new Pokemon("Dugtrio", 148, 140, 70));
-        pokemon.add(new Pokemon("Eevee", 114, 128, 110));
-        pokemon.add(new Pokemon("Ekans", 112, 112, 70));
-        pokemon.add(new Pokemon("Electabuzz", 198, 160, 130));
-        pokemon.add(new Pokemon("Electrode", 150, 174, 120));
-        pokemon.add(new Pokemon("Exeggcute", 110, 132, 120));
-        pokemon.add(new Pokemon("Exeggutor", 232, 164, 190));
-        pokemon.add(new Pokemon("Farfetch'd", 138, 132, 104));
-        pokemon.add(new Pokemon("Fearow", 168, 146, 130));
-        pokemon.add(new Pokemon("Flareon", 238, 178, 130));
-        pokemon.add(new Pokemon("Gastly", 136, 82, 60));
-        pokemon.add(new Pokemon("Gengar", 204, 156, 120));
-        pokemon.add(new Pokemon("Geodude", 106, 118, 80));
-        pokemon.add(new Pokemon("Gloom", 162, 158, 120));
-        pokemon.add(new Pokemon("Golbat", 164, 164, 150));
-        pokemon.add(new Pokemon("Goldeen", 112, 126, 90));
-        pokemon.add(new Pokemon("Golduck", 194, 176, 160));
-        pokemon.add(new Pokemon("Golem", 176, 198, 160));
-        pokemon.add(new Pokemon("Graveler", 142, 156, 110));
-        pokemon.add(new Pokemon("Grimer", 124, 110, 160));
-        pokemon.add(new Pokemon("Growlithe", 156, 110, 110));
-        pokemon.add(new Pokemon("Gyarados", 192, 196, 190));
-        pokemon.add(new Pokemon("Haunter", 172, 118, 90));
-        pokemon.add(new Pokemon("Hitmonchan", 138, 204, 100));
-        pokemon.add(new Pokemon("Hitmonlee", 148, 172, 100));
-        pokemon.add(new Pokemon("Horsea", 122, 100, 60));
-        pokemon.add(new Pokemon("Hypno", 162, 196, 170));
-        pokemon.add(new Pokemon("Ivysaur", 156, 158, 120));
-        pokemon.add(new Pokemon("Jigglypuff", 98, 54, 230));
-        pokemon.add(new Pokemon("Jolteon", 192, 174, 130));
-        pokemon.add(new Pokemon("Jynx", 172, 134, 130));
-        pokemon.add(new Pokemon("Kabuto", 148, 142, 60));
-        pokemon.add(new Pokemon("Kabutops", 190, 190, 120));
-        pokemon.add(new Pokemon("Kadabra", 150, 112, 80));
-        pokemon.add(new Pokemon("Kakuna", 62, 82, 90));
-        pokemon.add(new Pokemon("Kangaskhan", 142, 178, 210));
-        pokemon.add(new Pokemon("Kingler", 178, 168, 110));
-        pokemon.add(new Pokemon("Koffing", 136, 142, 80));
-        pokemon.add(new Pokemon("Krabby", 116, 110, 60));
-        pokemon.add(new Pokemon("Lapras", 186, 190, 260));
-        pokemon.add(new Pokemon("Lickitung", 126, 160, 180));
-        pokemon.add(new Pokemon("Machamp", 198, 180, 180));
-        pokemon.add(new Pokemon("Machoke", 154, 144, 160));
-        pokemon.add(new Pokemon("Machop", 118, 96, 140));
-        pokemon.add(new Pokemon("Magikarp", 42, 84, 40));
-        pokemon.add(new Pokemon("Magmar", 214, 158, 130));
-        pokemon.add(new Pokemon("Magnemite", 128, 138, 50));
-        pokemon.add(new Pokemon("Magneton", 186, 180, 100));
-        pokemon.add(new Pokemon("Mankey", 122, 96, 80));
-        pokemon.add(new Pokemon("Marowak", 140, 202, 120));
-        pokemon.add(new Pokemon("Meowth", 104, 94, 80));
-        pokemon.add(new Pokemon("Metapod", 56, 86, 100));
-        pokemon.add(new Pokemon("Mew", 220, 220, 200));
-        pokemon.add(new Pokemon("Mewtwo", 284, 202, 212));
-        pokemon.add(new Pokemon("Moltres", 242, 194, 180));
-        pokemon.add(new Pokemon("Mr.Mime", 154, 196, 80));
-        pokemon.add(new Pokemon("Muk", 180, 188, 210));
-        pokemon.add(new Pokemon("Nidoking", 204, 170, 162));
-        pokemon.add(new Pokemon("Nidoqueen", 184, 190, 180));
-        pokemon.add(new Pokemon("Nidoran♀", 100, 104, 110));
-        pokemon.add(new Pokemon("Nidoran♂", 110, 94, 92));
-        pokemon.add(new Pokemon("Nidorina", 132, 136, 140));
-        pokemon.add(new Pokemon("Nidorino", 142, 128, 122));
-        pokemon.add(new Pokemon("Ninetales", 176, 194, 146));
-        pokemon.add(new Pokemon("Oddish", 134, 130, 90));
-        pokemon.add(new Pokemon("Omanyte", 132, 160, 70));
-        pokemon.add(new Pokemon("Omastar", 180, 202, 140));
-        pokemon.add(new Pokemon("Onix", 90, 186, 70));
-        pokemon.add(new Pokemon("Paras", 122, 120, 70));
-        pokemon.add(new Pokemon("Parasect", 162, 170, 120));
-        pokemon.add(new Pokemon("Persian", 156, 146, 130));
-        pokemon.add(new Pokemon("Pidgeot", 170, 166, 166));
-        pokemon.add(new Pokemon("Pidgeotto", 126, 122, 126));
-        pokemon.add(new Pokemon("Pidgey", 94, 90, 80));
-        pokemon.add(new Pokemon("Pikachu", 124, 108, 70));
-        pokemon.add(new Pokemon("Pinsir", 184, 186, 130));
-        pokemon.add(new Pokemon("Poliwag", 108, 98, 80));
-        pokemon.add(new Pokemon("Poliwhirl", 132, 132, 130));
-        pokemon.add(new Pokemon("Poliwrath", 180, 202, 180));
-        pokemon.add(new Pokemon("Ponyta", 168, 138, 100));
-        pokemon.add(new Pokemon("Porygon", 156, 158, 130));
-        pokemon.add(new Pokemon("Primeape", 178, 150, 130));
-        pokemon.add(new Pokemon("Psyduck", 132, 112, 100));
-        pokemon.add(new Pokemon("Raichu", 200, 154, 120));
-        pokemon.add(new Pokemon("Rapidash", 200, 170, 130));
-        pokemon.add(new Pokemon("Raticate", 146, 150, 110));
-        pokemon.add(new Pokemon("Rattata", 92, 86, 60));
-        pokemon.add(new Pokemon("Rhydon", 166, 160, 210));
-        pokemon.add(new Pokemon("Rhyhorn", 110, 116, 160));
-        pokemon.add(new Pokemon("Sandshrew", 90, 114, 100));
-        pokemon.add(new Pokemon("Sandslash", 150, 172, 150));
-        pokemon.add(new Pokemon("Scyther", 176, 180, 140));
-        pokemon.add(new Pokemon("Seadra", 176, 150, 110));
-        pokemon.add(new Pokemon("Seaking", 172, 160, 160));
-        pokemon.add(new Pokemon("Seel", 104, 138, 130));
-        pokemon.add(new Pokemon("Shellder", 120, 112, 60));
-        pokemon.add(new Pokemon("Slowbro", 184, 198, 190));
-        pokemon.add(new Pokemon("Slowpoke", 110, 110, 180));
-        pokemon.add(new Pokemon("Snorlax", 180, 180, 320));
-        pokemon.add(new Pokemon("Spearow", 102, 78, 80));
-        pokemon.add(new Pokemon("Squirtle", 112, 142, 88));
-        pokemon.add(new Pokemon("Starmie", 194, 192, 120));
-        pokemon.add(new Pokemon("Staryu", 130, 128, 60));
-        pokemon.add(new Pokemon("Tangela", 164, 152, 130));
-        pokemon.add(new Pokemon("Tauros", 148, 184, 150));
-        pokemon.add(new Pokemon("Tentacool", 106, 136, 80));
-        pokemon.add(new Pokemon("Tentacruel", 170, 196, 160));
-        pokemon.add(new Pokemon("Vaporeon", 186, 168, 260));
-        pokemon.add(new Pokemon("Venomoth", 172, 154, 140));
-        pokemon.add(new Pokemon("Venonat", 108, 118, 120));
-        pokemon.add(new Pokemon("Venusaur", 198, 200, 160));
-        pokemon.add(new Pokemon("Victreebel", 222, 152, 160));
-        pokemon.add(new Pokemon("Vileplume", 202, 190, 150));
-        pokemon.add(new Pokemon("Voltorb", 102, 124, 80));
-        pokemon.add(new Pokemon("Vulpix", 106, 118, 76));
-        pokemon.add(new Pokemon("Wartortle", 144, 176, 118));
-        pokemon.add(new Pokemon("Weedle", 68, 64, 80));
-        pokemon.add(new Pokemon("Weepinbell", 190, 110, 130));
-        pokemon.add(new Pokemon("Weezing", 190, 198, 130));
-        pokemon.add(new Pokemon("Wigglytuff", 168, 108, 280));
-        pokemon.add(new Pokemon("Zapdos", 232, 194, 180));
-        pokemon.add(new Pokemon("Zubat", 88, 90, 80));
+    private void populatePokemon() {
+
+        pokemon = new ArrayList<>();
+
+        String[] names = getPokemonNames();
+        int[] attack = getResources().getIntArray(R.array.attack);
+        int[] defense = getResources().getIntArray(R.array.defense);
+        int[] stamina = getResources().getIntArray(R.array.stamina);
+        int[] devolution = getResources().getIntArray(R.array.DevolutionNumber);
+
+        int pokeListSize = getResources().getIntArray(R.array.attack).length;
+        for (int i = 0; i <= pokeListSize-1; i++){
+            pokemon.add(new Pokemon(names[i], i, attack[i], defense[i], stamina[i], devolution[i]));
+        }
+
+        //Sort pokemon alphabetically (maybe just do this in the res files?)
+        Collections.sort(pokemon, new Comparator<Pokemon>() {
+                    public int compare(Pokemon lhs, Pokemon rhs)
+                    {
+                        return lhs.name.compareTo(rhs.name);
+                    }
+                }
+        );
+
+        int devolNumber;
+        for (int i = 0; i <= pokeListSize-1; i++){ //for each pokemon get devolution number
+            devolNumber = pokemon.get(i).devolNumber;
+            if(devolNumber >= 0){ //if devolution is given, index >= 0
+                for (int j = 0; j <= pokeListSize-1; j++) { //check for devolution index in all pokemon
+                    if (pokemon.get(j).number == devolNumber) {
+                        pokemon.get(j).evolutions.add(i); // if found add sorted index of evolution (i) to devolution and break
+                        break;
+                    }
+                }
+            }
+        }
     }
 
-    private void populatePokemon_fr() {
-        pokemon = new ArrayList<Pokemon>();
-        pokemon.add(new Pokemon("Bulbizarre", 126, 126, 90));
-        pokemon.add(new Pokemon("Herbizarre", 156, 158, 120));
-        pokemon.add(new Pokemon("Florizarre", 198, 200, 160));
-        pokemon.add(new Pokemon("Salamèche", 128, 108, 78));
-        pokemon.add(new Pokemon("Reptincel", 160, 140, 116));
-        pokemon.add(new Pokemon("Dracaufeu", 212, 182, 156));
-        pokemon.add(new Pokemon("Carapuce", 112, 142, 88));
-        pokemon.add(new Pokemon("Carabaffe", 144, 176, 118));
-        pokemon.add(new Pokemon("Tortank", 186, 222, 158));
-        pokemon.add(new Pokemon("Chenipan", 62, 66, 90));
-        pokemon.add(new Pokemon("Chrysacier", 56, 86, 100));
-        pokemon.add(new Pokemon("Papilusion", 144, 144, 120));
-        pokemon.add(new Pokemon("Aspicot", 68, 64, 80));
-        pokemon.add(new Pokemon("Coconfort", 62, 82, 90));
-        pokemon.add(new Pokemon("Dardargnan", 144, 130, 130));
-        pokemon.add(new Pokemon("Roucool", 94, 90, 80));
-        pokemon.add(new Pokemon("Roucoups", 126, 122, 126));
-        pokemon.add(new Pokemon("Roucarnage", 170, 166, 166));
-        pokemon.add(new Pokemon("Rattata", 92, 86, 60));
-        pokemon.add(new Pokemon("Rattatac", 146, 150, 110));
-        pokemon.add(new Pokemon("Piafabec", 102, 78, 80));
-        pokemon.add(new Pokemon("Rapasdepic", 168, 146, 130));
-        pokemon.add(new Pokemon("Abo", 112, 112, 70));
-        pokemon.add(new Pokemon("Arbok", 166, 166, 120));
-        pokemon.add(new Pokemon("Pikachu", 124, 108, 70));
-        pokemon.add(new Pokemon("Raichu", 200, 154, 120));
-        pokemon.add(new Pokemon("Sabelette", 90, 114, 100));
-        pokemon.add(new Pokemon("Sablaireau", 150, 172, 150));
-        pokemon.add(new Pokemon("Nidoran♀", 100, 104, 110));
-        pokemon.add(new Pokemon("Nidorina", 132, 136, 140));
-        pokemon.add(new Pokemon("Nidoqueen", 184, 190, 180));
-        pokemon.add(new Pokemon("Nidoran♂", 110, 94, 92));
-        pokemon.add(new Pokemon("Nidorino", 142, 128, 122));
-        pokemon.add(new Pokemon("Nidoking", 204, 170, 162));
-        pokemon.add(new Pokemon("Mélofée", 116, 124, 140));
-        pokemon.add(new Pokemon("Mélodelfe", 178, 178, 190));
-        pokemon.add(new Pokemon("Goupix", 106, 118, 76));
-        pokemon.add(new Pokemon("Feunard", 176, 194, 146));
-        pokemon.add(new Pokemon("Rondoudou", 98, 54, 230));
-        pokemon.add(new Pokemon("Grodoudou", 168, 108, 280));
-        pokemon.add(new Pokemon("Nosferapti", 88, 90, 80));
-        pokemon.add(new Pokemon("Nosferalto", 164, 164, 150));
-        pokemon.add(new Pokemon("Mystherbe", 134, 130, 90));
-        pokemon.add(new Pokemon("Ortide", 162, 158, 120));
-        pokemon.add(new Pokemon("Rafflesia", 202, 190, 150));
-        pokemon.add(new Pokemon("Paras", 122, 120, 70));
-        pokemon.add(new Pokemon("Parasect", 162, 170, 120));
-        pokemon.add(new Pokemon("Mimitoss", 108, 118, 120));
-        pokemon.add(new Pokemon("Aéromite", 172, 154, 140));
-        pokemon.add(new Pokemon("Taupiqueur", 108, 86, 20));
-        pokemon.add(new Pokemon("Triopikeur", 148, 140, 70));
-        pokemon.add(new Pokemon("Miaouss", 104, 94, 80));
-        pokemon.add(new Pokemon("Persian", 156, 146, 130));
-        pokemon.add(new Pokemon("Psykokwak", 132, 112, 100));
-        pokemon.add(new Pokemon("Akwakwak", 194, 176, 160));
-        pokemon.add(new Pokemon("Férosinge", 122, 96, 80));
-        pokemon.add(new Pokemon("Colossinge", 178, 150, 130));
-        pokemon.add(new Pokemon("Caninos", 156, 110, 110));
-        pokemon.add(new Pokemon("Arcanin", 230, 180, 180));
-        pokemon.add(new Pokemon("Ptitard", 108, 98, 80));
-        pokemon.add(new Pokemon("Têtarte", 132, 132, 130));
-        pokemon.add(new Pokemon("Tartard", 180, 202, 180));
-        pokemon.add(new Pokemon("Abra", 110, 76, 50));
-        pokemon.add(new Pokemon("Kadabra", 150, 112, 80));
-        pokemon.add(new Pokemon("Alakazam", 186, 152, 110));
-        pokemon.add(new Pokemon("Machoc", 118, 96, 140));
-        pokemon.add(new Pokemon("Machopeur", 154, 144, 160));
-        pokemon.add(new Pokemon("Mackogneur", 198, 180, 180));
-        pokemon.add(new Pokemon("Chétiflor", 158, 78, 100));
-        pokemon.add(new Pokemon("Boustiflor", 190, 110, 130));
-        pokemon.add(new Pokemon("Empiflor", 222, 152, 160));
-        pokemon.add(new Pokemon("Tentacool", 106, 136, 80));
-        pokemon.add(new Pokemon("Tentacruel", 170, 196, 160));
-        pokemon.add(new Pokemon("Racaillou", 106, 118, 80));
-        pokemon.add(new Pokemon("Gravalanch", 142, 156, 110));
-        pokemon.add(new Pokemon("Grolem", 176, 198, 160));
-        pokemon.add(new Pokemon("Ponyta", 168, 138, 100));
-        pokemon.add(new Pokemon("Galopa", 200, 170, 130));
-        pokemon.add(new Pokemon("Ramoloss", 110, 110, 180));
-        pokemon.add(new Pokemon("Flagadoss", 184, 198, 190));
-        pokemon.add(new Pokemon("Magnéti", 128, 138, 50));
-        pokemon.add(new Pokemon("Magnéton", 186, 180, 100));
-        pokemon.add(new Pokemon("Canarticho", 138, 132, 104));
-        pokemon.add(new Pokemon("Doduo", 126, 96, 70));
-        pokemon.add(new Pokemon("Dodrio", 182, 150, 120));
-        pokemon.add(new Pokemon("Otaria", 104, 138, 130));
-        pokemon.add(new Pokemon("Lamantine", 156, 192, 180));
-        pokemon.add(new Pokemon("Tadmorv", 124, 110, 160));
-        pokemon.add(new Pokemon("Grotadmorv", 180, 188, 210));
-        pokemon.add(new Pokemon("Kokiyas", 120, 112, 60));
-        pokemon.add(new Pokemon("Crustabri", 196, 196, 100));
-        pokemon.add(new Pokemon("Fantominus", 136, 82, 60));
-        pokemon.add(new Pokemon("Spectrum", 172, 118, 90));
-        pokemon.add(new Pokemon("Ectoplasma", 204, 156, 120));
-        pokemon.add(new Pokemon("Onix", 90, 186, 70));
-        pokemon.add(new Pokemon("Soporifik", 104, 140, 120));
-        pokemon.add(new Pokemon("Hypnomade", 162, 196, 170));
-        pokemon.add(new Pokemon("Krabby", 116, 110, 60));
-        pokemon.add(new Pokemon("Krabboss", 178, 168, 110));
-        pokemon.add(new Pokemon("Voltorbe", 102, 124, 80));
-        pokemon.add(new Pokemon("Électrode", 150, 174, 120));
-        pokemon.add(new Pokemon("Nœunœuf", 110, 132, 120));
-        pokemon.add(new Pokemon("Noadkoko", 232, 164, 190));
-        pokemon.add(new Pokemon("Osselait", 102, 150, 100));
-        pokemon.add(new Pokemon("Ossatueur", 140, 202, 120));
-        pokemon.add(new Pokemon("Kicklee", 148, 172, 100));
-        pokemon.add(new Pokemon("Tygnon", 138, 204, 100));
-        pokemon.add(new Pokemon("Excelangue", 126, 160, 180));
-        pokemon.add(new Pokemon("Smogo", 136, 142, 80));
-        pokemon.add(new Pokemon("Smogogo", 190, 198, 130));
-        pokemon.add(new Pokemon("Rhinocorne", 110, 116, 160));
-        pokemon.add(new Pokemon("Rhinoféros", 166, 160, 210));
-        pokemon.add(new Pokemon("Leveinard", 40, 60, 500));
-        pokemon.add(new Pokemon("Saquedeneu", 164, 152, 130));
-        pokemon.add(new Pokemon("Kangourex", 142, 178, 210));
-        pokemon.add(new Pokemon("Hypotrempe", 122, 100, 60));
-        pokemon.add(new Pokemon("Hypocéan", 176, 150, 110));
-        pokemon.add(new Pokemon("Poissirène", 112, 126, 90));
-        pokemon.add(new Pokemon("Poissoroy", 172, 160, 160));
-        pokemon.add(new Pokemon("Stari", 130, 128, 60));
-        pokemon.add(new Pokemon("Staross", 194, 192, 120));
-        pokemon.add(new Pokemon("M.Mime", 154, 196, 80));
-        pokemon.add(new Pokemon("Insécateur", 176, 180, 140));
-        pokemon.add(new Pokemon("Lippoutou", 172, 134, 130));
-        pokemon.add(new Pokemon("Élektek", 198, 160, 130));
-        pokemon.add(new Pokemon("Magmar", 214, 158, 130));
-        pokemon.add(new Pokemon("Scarabrute", 184, 186, 130));
-        pokemon.add(new Pokemon("Tauros", 148, 184, 150));
-        pokemon.add(new Pokemon("Magicarpe", 42, 84, 40));
-        pokemon.add(new Pokemon("Léviator", 192, 196, 190));
-        pokemon.add(new Pokemon("Lokhlass", 186, 190, 260));
-        pokemon.add(new Pokemon("Métamorph", 110, 110, 96));
-        pokemon.add(new Pokemon("Évoli", 114, 128, 110));
-        pokemon.add(new Pokemon("Aquali", 186, 168, 260));
-        pokemon.add(new Pokemon("Voltali", 192, 174, 130));
-        pokemon.add(new Pokemon("Pyroli", 238, 178, 130));
-        pokemon.add(new Pokemon("Porygon", 156, 158, 130));
-        pokemon.add(new Pokemon("Amonita", 132, 160, 70));
-        pokemon.add(new Pokemon("Amonistar", 180, 202, 140));
-        pokemon.add(new Pokemon("Kabuto", 148, 142, 60));
-        pokemon.add(new Pokemon("Kabutops", 190, 190, 120));
-        pokemon.add(new Pokemon("Ptéra", 182, 162, 160));
-        pokemon.add(new Pokemon("Ronflex", 180, 180, 320));
-        pokemon.add(new Pokemon("Artikodin", 198, 242, 180));
-        pokemon.add(new Pokemon("Électhor", 232, 194, 180));
-        pokemon.add(new Pokemon("Sulfura", 242, 194, 180));
-        pokemon.add(new Pokemon("Minidraco", 128, 110, 82));
-        pokemon.add(new Pokemon("Draco", 170, 152, 122));
-        pokemon.add(new Pokemon("Dracolosse", 250, 212, 182));
-        pokemon.add(new Pokemon("Mewtwo", 284, 202, 212));
-        pokemon.add(new Pokemon("Mew ", 220, 220, 200));
+    private String[] getPokemonNames() {
+        ArrayList<String> names = new ArrayList<>();
+        names.add(getResources().getString(R.string.pokemon001));
+        names.add(getResources().getString(R.string.pokemon002));
+        names.add(getResources().getString(R.string.pokemon003));
+        names.add(getResources().getString(R.string.pokemon004));
+        names.add(getResources().getString(R.string.pokemon005));
+        names.add(getResources().getString(R.string.pokemon006));
+        names.add(getResources().getString(R.string.pokemon007));
+        names.add(getResources().getString(R.string.pokemon008));
+        names.add(getResources().getString(R.string.pokemon009));
+        names.add(getResources().getString(R.string.pokemon010));
+        names.add(getResources().getString(R.string.pokemon011));
+        names.add(getResources().getString(R.string.pokemon012));
+        names.add(getResources().getString(R.string.pokemon013));
+        names.add(getResources().getString(R.string.pokemon014));
+        names.add(getResources().getString(R.string.pokemon015));
+        names.add(getResources().getString(R.string.pokemon016));
+        names.add(getResources().getString(R.string.pokemon017));
+        names.add(getResources().getString(R.string.pokemon018));
+        names.add(getResources().getString(R.string.pokemon019));
+        names.add(getResources().getString(R.string.pokemon020));
+        names.add(getResources().getString(R.string.pokemon021));
+        names.add(getResources().getString(R.string.pokemon022));
+        names.add(getResources().getString(R.string.pokemon023));
+        names.add(getResources().getString(R.string.pokemon024));
+        names.add(getResources().getString(R.string.pokemon025));
+        names.add(getResources().getString(R.string.pokemon026));
+        names.add(getResources().getString(R.string.pokemon027));
+        names.add(getResources().getString(R.string.pokemon028));
+        names.add(getResources().getString(R.string.pokemon029));
+        names.add(getResources().getString(R.string.pokemon030));
+        names.add(getResources().getString(R.string.pokemon031));
+        names.add(getResources().getString(R.string.pokemon032));
+        names.add(getResources().getString(R.string.pokemon033));
+        names.add(getResources().getString(R.string.pokemon034));
+        names.add(getResources().getString(R.string.pokemon035));
+        names.add(getResources().getString(R.string.pokemon036));
+        names.add(getResources().getString(R.string.pokemon037));
+        names.add(getResources().getString(R.string.pokemon038));
+        names.add(getResources().getString(R.string.pokemon039));
+        names.add(getResources().getString(R.string.pokemon040));
+        names.add(getResources().getString(R.string.pokemon041));
+        names.add(getResources().getString(R.string.pokemon042));
+        names.add(getResources().getString(R.string.pokemon043));
+        names.add(getResources().getString(R.string.pokemon044));
+        names.add(getResources().getString(R.string.pokemon045));
+        names.add(getResources().getString(R.string.pokemon046));
+        names.add(getResources().getString(R.string.pokemon047));
+        names.add(getResources().getString(R.string.pokemon048));
+        names.add(getResources().getString(R.string.pokemon049));
+        names.add(getResources().getString(R.string.pokemon050));
+        names.add(getResources().getString(R.string.pokemon051));
+        names.add(getResources().getString(R.string.pokemon052));
+        names.add(getResources().getString(R.string.pokemon053));
+        names.add(getResources().getString(R.string.pokemon054));
+        names.add(getResources().getString(R.string.pokemon055));
+        names.add(getResources().getString(R.string.pokemon056));
+        names.add(getResources().getString(R.string.pokemon057));
+        names.add(getResources().getString(R.string.pokemon058));
+        names.add(getResources().getString(R.string.pokemon059));
+        names.add(getResources().getString(R.string.pokemon060));
+        names.add(getResources().getString(R.string.pokemon061));
+        names.add(getResources().getString(R.string.pokemon062));
+        names.add(getResources().getString(R.string.pokemon063));
+        names.add(getResources().getString(R.string.pokemon064));
+        names.add(getResources().getString(R.string.pokemon065));
+        names.add(getResources().getString(R.string.pokemon066));
+        names.add(getResources().getString(R.string.pokemon067));
+        names.add(getResources().getString(R.string.pokemon068));
+        names.add(getResources().getString(R.string.pokemon069));
+        names.add(getResources().getString(R.string.pokemon070));
+        names.add(getResources().getString(R.string.pokemon071));
+        names.add(getResources().getString(R.string.pokemon072));
+        names.add(getResources().getString(R.string.pokemon073));
+        names.add(getResources().getString(R.string.pokemon074));
+        names.add(getResources().getString(R.string.pokemon075));
+        names.add(getResources().getString(R.string.pokemon076));
+        names.add(getResources().getString(R.string.pokemon077));
+        names.add(getResources().getString(R.string.pokemon078));
+        names.add(getResources().getString(R.string.pokemon079));
+        names.add(getResources().getString(R.string.pokemon080));
+        names.add(getResources().getString(R.string.pokemon081));
+        names.add(getResources().getString(R.string.pokemon082));
+        names.add(getResources().getString(R.string.pokemon083));
+        names.add(getResources().getString(R.string.pokemon084));
+        names.add(getResources().getString(R.string.pokemon085));
+        names.add(getResources().getString(R.string.pokemon086));
+        names.add(getResources().getString(R.string.pokemon087));
+        names.add(getResources().getString(R.string.pokemon088));
+        names.add(getResources().getString(R.string.pokemon089));
+        names.add(getResources().getString(R.string.pokemon090));
+        names.add(getResources().getString(R.string.pokemon091));
+        names.add(getResources().getString(R.string.pokemon092));
+        names.add(getResources().getString(R.string.pokemon093));
+        names.add(getResources().getString(R.string.pokemon094));
+        names.add(getResources().getString(R.string.pokemon095));
+        names.add(getResources().getString(R.string.pokemon096));
+        names.add(getResources().getString(R.string.pokemon097));
+        names.add(getResources().getString(R.string.pokemon098));
+        names.add(getResources().getString(R.string.pokemon099));
+        names.add(getResources().getString(R.string.pokemon100));
+        names.add(getResources().getString(R.string.pokemon101));
+        names.add(getResources().getString(R.string.pokemon102));
+        names.add(getResources().getString(R.string.pokemon103));
+        names.add(getResources().getString(R.string.pokemon104));
+        names.add(getResources().getString(R.string.pokemon105));
+        names.add(getResources().getString(R.string.pokemon106));
+        names.add(getResources().getString(R.string.pokemon107));
+        names.add(getResources().getString(R.string.pokemon108));
+        names.add(getResources().getString(R.string.pokemon109));
+        names.add(getResources().getString(R.string.pokemon110));
+        names.add(getResources().getString(R.string.pokemon111));
+        names.add(getResources().getString(R.string.pokemon112));
+        names.add(getResources().getString(R.string.pokemon113));
+        names.add(getResources().getString(R.string.pokemon114));
+        names.add(getResources().getString(R.string.pokemon115));
+        names.add(getResources().getString(R.string.pokemon116));
+        names.add(getResources().getString(R.string.pokemon117));
+        names.add(getResources().getString(R.string.pokemon118));
+        names.add(getResources().getString(R.string.pokemon119));
+        names.add(getResources().getString(R.string.pokemon120));
+        names.add(getResources().getString(R.string.pokemon121));
+        names.add(getResources().getString(R.string.pokemon122));
+        names.add(getResources().getString(R.string.pokemon123));
+        names.add(getResources().getString(R.string.pokemon124));
+        names.add(getResources().getString(R.string.pokemon125));
+        names.add(getResources().getString(R.string.pokemon126));
+        names.add(getResources().getString(R.string.pokemon127));
+        names.add(getResources().getString(R.string.pokemon128));
+        names.add(getResources().getString(R.string.pokemon129));
+        names.add(getResources().getString(R.string.pokemon130));
+        names.add(getResources().getString(R.string.pokemon131));
+        names.add(getResources().getString(R.string.pokemon132));
+        names.add(getResources().getString(R.string.pokemon133));
+        names.add(getResources().getString(R.string.pokemon134));
+        names.add(getResources().getString(R.string.pokemon135));
+        names.add(getResources().getString(R.string.pokemon136));
+        names.add(getResources().getString(R.string.pokemon137));
+        names.add(getResources().getString(R.string.pokemon138));
+        names.add(getResources().getString(R.string.pokemon139));
+        names.add(getResources().getString(R.string.pokemon140));
+        names.add(getResources().getString(R.string.pokemon141));
+        names.add(getResources().getString(R.string.pokemon142));
+        names.add(getResources().getString(R.string.pokemon143));
+        names.add(getResources().getString(R.string.pokemon144));
+        names.add(getResources().getString(R.string.pokemon145));
+        names.add(getResources().getString(R.string.pokemon146));
+        names.add(getResources().getString(R.string.pokemon147));
+        names.add(getResources().getString(R.string.pokemon148));
+        names.add(getResources().getString(R.string.pokemon149));
+        names.add(getResources().getString(R.string.pokemon150));
+        names.add(getResources().getString(R.string.pokemon151));
+        return names.toArray(new String[150]);
     }
 
-    private void populatePokemon_de() {
-        pokemon = new ArrayList<Pokemon>();
-        pokemon.add(new Pokemon("Bisasam", 126, 126, 90));
-        pokemon.add(new Pokemon("Bisaknosp", 156, 158, 120));
-        pokemon.add(new Pokemon("Bisaflor", 198, 200, 160));
-        pokemon.add(new Pokemon("Glumanda", 128, 108, 78));
-        pokemon.add(new Pokemon("Glutexo", 160, 140, 116));
-        pokemon.add(new Pokemon("Glurak", 212, 182, 156));
-        pokemon.add(new Pokemon("Schiggy", 112, 142, 88));
-        pokemon.add(new Pokemon("Schillok", 144, 176, 118));
-        pokemon.add(new Pokemon("Turtok", 186, 222, 158));
-        pokemon.add(new Pokemon("Raupy", 62, 66, 90));
-        pokemon.add(new Pokemon("Safcon", 56, 86, 100));
-        pokemon.add(new Pokemon("Smettbo", 144, 144, 120));
-        pokemon.add(new Pokemon("Hornliu", 68, 64, 80));
-        pokemon.add(new Pokemon("Kokuna", 62, 82, 90));
-        pokemon.add(new Pokemon("Bibor", 144, 130, 130));
-        pokemon.add(new Pokemon("Taubsi", 94, 90, 80));
-        pokemon.add(new Pokemon("Tauboga", 126, 122, 126));
-        pokemon.add(new Pokemon("Tauboss", 170, 166, 166));
-        pokemon.add(new Pokemon("Rattfratz", 92, 86, 60));
-        pokemon.add(new Pokemon("Rattikarl", 146, 150, 110));
-        pokemon.add(new Pokemon("Habitak", 102, 78, 80));
-        pokemon.add(new Pokemon("Ibitak", 168, 146, 130));
-        pokemon.add(new Pokemon("Rettan", 112, 112, 70));
-        pokemon.add(new Pokemon("Arbok", 166, 166, 120));
-        pokemon.add(new Pokemon("Pikachu", 124, 108, 70));
-        pokemon.add(new Pokemon("Raichu", 200, 154, 120));
-        pokemon.add(new Pokemon("Sandan", 90, 114, 100));
-        pokemon.add(new Pokemon("Sandamer", 150, 172, 150));
-        pokemon.add(new Pokemon("Nidoran♀", 100, 104, 110));
-        pokemon.add(new Pokemon("Nidorina", 132, 136, 140));
-        pokemon.add(new Pokemon("Nidoqueen", 184, 190, 180));
-        pokemon.add(new Pokemon("Nidoran♂", 110, 94, 92));
-        pokemon.add(new Pokemon("Nidorino", 142, 128, 122));
-        pokemon.add(new Pokemon("Nidoking", 204, 170, 162));
-        pokemon.add(new Pokemon("Piepi", 116, 124, 140));
-        pokemon.add(new Pokemon("Pixi", 178, 178, 190));
-        pokemon.add(new Pokemon("Vulpix", 106, 118, 76));
-        pokemon.add(new Pokemon("Vulnona", 176, 194, 146));
-        pokemon.add(new Pokemon("Pummeluff", 98, 54, 230));
-        pokemon.add(new Pokemon("Knuddeluff", 168, 108, 280));
-        pokemon.add(new Pokemon("Zubat", 88, 90, 80));
-        pokemon.add(new Pokemon("Golbat", 164, 164, 150));
-        pokemon.add(new Pokemon("Myrapla", 134, 130, 90));
-        pokemon.add(new Pokemon("Duflor", 162, 158, 120));
-        pokemon.add(new Pokemon("Giflor", 202, 190, 150));
-        pokemon.add(new Pokemon("Paras", 122, 120, 70));
-        pokemon.add(new Pokemon("Parasek", 162, 170, 120));
-        pokemon.add(new Pokemon("Bluzuk", 108, 118, 120));
-        pokemon.add(new Pokemon("Omot", 172, 154, 140));
-        pokemon.add(new Pokemon("Digda", 108, 86, 20));
-        pokemon.add(new Pokemon("Digdri", 148, 140, 70));
-        pokemon.add(new Pokemon("Mauzi", 104, 94, 80));
-        pokemon.add(new Pokemon("Snobilikat", 156, 146, 130));
-        pokemon.add(new Pokemon("Enton", 132, 112, 100));
-        pokemon.add(new Pokemon("Entoron", 194, 176, 160));
-        pokemon.add(new Pokemon("Menki", 122, 96, 80));
-        pokemon.add(new Pokemon("Rasaff", 178, 150, 130));
-        pokemon.add(new Pokemon("Fukano", 156, 110, 110));
-        pokemon.add(new Pokemon("Arkani", 230, 180, 180));
-        pokemon.add(new Pokemon("Quapsel", 108, 98, 80));
-        pokemon.add(new Pokemon("Quaputzi", 132, 132, 130));
-        pokemon.add(new Pokemon("Quappo", 180, 202, 180));
-        pokemon.add(new Pokemon("Abra", 110, 76, 50));
-        pokemon.add(new Pokemon("Kadabra", 150, 112, 80));
-        pokemon.add(new Pokemon("Simsala", 186, 152, 110));
-        pokemon.add(new Pokemon("Machollo", 118, 96, 140));
-        pokemon.add(new Pokemon("Maschock", 154, 144, 160));
-        pokemon.add(new Pokemon("Machomei", 198, 180, 180));
-        pokemon.add(new Pokemon("Knofensa", 158, 78, 100));
-        pokemon.add(new Pokemon("Ultrigaria", 190, 110, 130));
-        pokemon.add(new Pokemon("Sarzenia", 222, 152, 160));
-        pokemon.add(new Pokemon("Tentacha", 106, 136, 80));
-        pokemon.add(new Pokemon("Tentoxa", 170, 196, 160));
-        pokemon.add(new Pokemon("Kleinstein", 106, 118, 80));
-        pokemon.add(new Pokemon("Georok", 142, 156, 110));
-        pokemon.add(new Pokemon("Geowaz", 176, 198, 160));
-        pokemon.add(new Pokemon("Ponita", 168, 138, 100));
-        pokemon.add(new Pokemon("Gallopa", 200, 170, 130));
-        pokemon.add(new Pokemon("Flegmon", 110, 110, 180));
-        pokemon.add(new Pokemon("Lahmus", 184, 198, 190));
-        pokemon.add(new Pokemon("Magnetilo", 128, 138, 50));
-        pokemon.add(new Pokemon("Magneton", 186, 180, 100));
-        pokemon.add(new Pokemon("Porenta", 138, 132, 104));
-        pokemon.add(new Pokemon("Dodu", 126, 96, 70));
-        pokemon.add(new Pokemon("Dodri", 182, 150, 120));
-        pokemon.add(new Pokemon("Jurob", 104, 138, 130));
-        pokemon.add(new Pokemon("Jugong", 156, 192, 180));
-        pokemon.add(new Pokemon("Sleima", 124, 110, 160));
-        pokemon.add(new Pokemon("Sleimok", 180, 188, 210));
-        pokemon.add(new Pokemon("Muschas", 120, 112, 60));
-        pokemon.add(new Pokemon("Austos", 196, 196, 100));
-        pokemon.add(new Pokemon("Nebulak", 136, 82, 60));
-        pokemon.add(new Pokemon("Alpollo", 172, 118, 90));
-        pokemon.add(new Pokemon("Gengar", 204, 156, 120));
-        pokemon.add(new Pokemon("Onix", 90, 186, 70));
-        pokemon.add(new Pokemon("Traumato", 104, 140, 120));
-        pokemon.add(new Pokemon("Hypno", 162, 196, 170));
-        pokemon.add(new Pokemon("Krabby", 116, 110, 60));
-        pokemon.add(new Pokemon("Kingler", 178, 168, 110));
-        pokemon.add(new Pokemon("Voltobal", 102, 124, 80));
-        pokemon.add(new Pokemon("Lektrobal", 150, 174, 120));
-        pokemon.add(new Pokemon("Owei", 110, 132, 120));
-        pokemon.add(new Pokemon("Kokowei", 232, 164, 190));
-        pokemon.add(new Pokemon("Tragosso", 102, 150, 100));
-        pokemon.add(new Pokemon("Knogga", 140, 202, 120));
-        pokemon.add(new Pokemon("Kicklee", 148, 172, 100));
-        pokemon.add(new Pokemon("Nockchan", 138, 204, 100));
-        pokemon.add(new Pokemon("Schlurp", 126, 160, 180));
-        pokemon.add(new Pokemon("Smogon", 136, 142, 80));
-        pokemon.add(new Pokemon("Smogmog", 190, 198, 130));
-        pokemon.add(new Pokemon("Rihorn", 110, 116, 160));
-        pokemon.add(new Pokemon("Rizeros", 166, 160, 210));
-        pokemon.add(new Pokemon("Chaneira", 40, 60, 500));
-        pokemon.add(new Pokemon("Tangela", 164, 152, 130));
-        pokemon.add(new Pokemon("Kangama", 142, 178, 210));
-        pokemon.add(new Pokemon("Seeper", 122, 100, 60));
-        pokemon.add(new Pokemon("Seemon", 176, 150, 110));
-        pokemon.add(new Pokemon("Goldini", 112, 126, 90));
-        pokemon.add(new Pokemon("Golking", 172, 160, 160));
-        pokemon.add(new Pokemon("Sterndu", 130, 128, 60));
-        pokemon.add(new Pokemon("Starmie", 194, 192, 120));
-        pokemon.add(new Pokemon("Pantimos", 154, 196, 80));
-        pokemon.add(new Pokemon("Sichlor", 176, 180, 140));
-        pokemon.add(new Pokemon("Rossana", 172, 134, 130));
-        pokemon.add(new Pokemon("Elektek", 198, 160, 130));
-        pokemon.add(new Pokemon("Magmar", 214, 158, 130));
-        pokemon.add(new Pokemon("Pinsir", 184, 186, 130));
-        pokemon.add(new Pokemon("Tauros", 148, 184, 150));
-        pokemon.add(new Pokemon("Karpador", 42, 84, 40));
-        pokemon.add(new Pokemon("Garados", 192, 196, 190));
-        pokemon.add(new Pokemon("Lapras", 186, 190, 260));
-        pokemon.add(new Pokemon("Ditto", 110, 110, 96));
-        pokemon.add(new Pokemon("Evoli", 114, 128, 110));
-        pokemon.add(new Pokemon("Aquana", 186, 168, 260));
-        pokemon.add(new Pokemon("Blitza", 192, 174, 130));
-        pokemon.add(new Pokemon("Flamara", 238, 178, 130));
-        pokemon.add(new Pokemon("Porygon", 156, 158, 130));
-        pokemon.add(new Pokemon("Amonitas", 132, 160, 70));
-        pokemon.add(new Pokemon("Amoroso", 180, 202, 140));
-        pokemon.add(new Pokemon("Kabuto", 148, 142, 60));
-        pokemon.add(new Pokemon("Kabutops", 190, 190, 120));
-        pokemon.add(new Pokemon("Aerodactyl", 182, 162, 160));
-        pokemon.add(new Pokemon("Relaxo", 180, 180, 320));
-        pokemon.add(new Pokemon("Arktos", 198, 242, 180));
-        pokemon.add(new Pokemon("Zapdos", 232, 194, 180));
-        pokemon.add(new Pokemon("Lavados", 242, 194, 180));
-        pokemon.add(new Pokemon("Dratini", 128, 110, 82));
-        pokemon.add(new Pokemon("Dragonir", 170, 152, 122));
-        pokemon.add(new Pokemon("Dragoran", 250, 212, 182));
-        pokemon.add(new Pokemon("Mewtu", 284, 202, 212));
-        pokemon.add(new Pokemon("Mew", 220, 220, 200));
-    }
 }

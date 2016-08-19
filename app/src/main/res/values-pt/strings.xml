@@ -1,7 +1,6 @@
 <resources>
-    <string name="app_name" translatable="false">GoIV</string>
-    <string name="drawer_open">Open navigation drawer</string>
-    <string name="drawer_close">Close navigation drawer</string>
+    <string name="drawer_open">Abrir gaveta de navegação</string>
+    <string name="drawer_close">Fechar gaveta de navegação</string>
 
     <string name="pokemon001">Bulbasaur</string>
     <string name="pokemon002">Ivysaur</string>
@@ -155,33 +154,7 @@
     <string name="pokemon150">Mewtwo</string>
     <string name="pokemon151">Mew</string>
 
-    <string name="welcome_message">Welcome to GoIV!\n\nInstructions:\n1. Enter your trainer level below\n2. Press the start button and allow screen capture\n3. Open up your desired Pokémon in \'Pokémon Go\'\n4. Tap the IV Button to scan the Pokémon\n5. Adjust the scanned data if necessary\n6. Check IV!</string>
-    <string name="goiv_is_open_source">GoIV is open source!\ngithub.com/farkam135/GoIV\nreddit.com/r/GoIV</string>
-    <string name="trainer_level">Trainer Level</string>
-
-    <string name="pokemon_name">Pokémon name:</string>
-    <string name="cp">CP</string>
-    <string name="hp">HP</string>
-    <string name="use_the_slider_below_to_align_the_arc">Use the slider below to align the arc</string>
-    <string name="cancel">Cancel</string>
-    <string name="check_iv">Check IV</string>
-    <string name="main_not_numeric">%1$s is not a number.</string>
-    <string name="main_invalide_trainerlvl">Invalid Trainer Level!</string>
-    <string name="notification_title">GoIV Running - Level %1$s</string>
-    <string name="notification_text">Tap to open</string>
-    <string name="ivtext_title">Your lvl %1$s %2$s can be:</string>
-    <string name="ivtext_possibilities">%1$s more possibilities...</string>
-    <string name="ivtext_no_possibilities">No possibilities, please check your stats again!</string>
-    <string name="ivtext_iv">Min: %1$s%% Average: %2$s%% Max: %3$s%%\n</string>
-    <string name="ivtext_evolve">Can be evolved into %1$s:\n</string>
-    <string name="ivtext_evolve_further">Can be further evolved into %1$s:</string>
-    <string name="ivtext_many_possibilities">There are too many possibilities for this pokemon. Try powering it up!</string>
-    <string name="ivtext_max_lvl_cost">Cost to reach lvl %1$s:</string>
-    <string name="ivtext_max_lvl_cost2">Candy: %1$s Stardust: %2$s</string>
-    <string name="main_battery_saver">Battery Saver (Screenshot to Scan)</string>
-    <string name="ivtext_cp_lvl">CP at lvl %1$s: %2$s - %3$s</string>
-    <string name="ivtext_stats">Atk: %1$02d Def: %2$02d Sta: %3$02d (%4$03d%%)</string>
-    <string name="close">Close</string>
-    <string name="main_permission">Grant Permissions</string>
-    <string name="main_start">Start</string>
+    <string name="welcome_message">Bem-vindo ao GoIV!\n\nInstruções:\n1. Insere o nível de treinador em baixo\n2. Carrega em START e permite a captura de ecrã\n3. Abre o teu Pokemon na aplicação \'Pokémon Go\'\n4. Carrega no botão IV para iniciar o exame\n5. Ajusta os dados se necessário\n6. Observa o IV!</string>
+    <string name="goiv_is_open_source">GoIV é agora em código aberto!\ngithub.com/farkam135/GoIV\nreddit.com/r/GoIV</string>
+    <string name="trainer_level">Nível de Treinador</string>
 </resources>
